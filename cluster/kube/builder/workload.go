@@ -154,11 +154,19 @@ func (b *Workload) container() corev1.Container {
 		kcontainer.Resources.Limits[corev1.ResourceMemory] = resource.NewQuantity(int64(mem.Quantity.Value()+requestedMem), resource.DecimalSI).DeepCopy() // nolint: gosec
 	}
 
+        b.log.Info("DEBUG: Service params found", "serviceName", service.Name, "params", service.Params)
 	if service.Params != nil {
 		for _, params := range service.Params.Storage {
+            volumeMountName := fmt.Sprintf("%s-%s", service.Name, params.Name)
+            b.log.Info("DEBUG: Creating volume mount",
+                "service", service.Name,
+                "params.Name", params.Name,
+                "volumeMountName", volumeMountName,
+                "mountPath", params.Mount,
+                "readOnly", params.ReadOnly)
 			kcontainer.VolumeMounts = append(kcontainer.VolumeMounts, corev1.VolumeMount{
 				// matches VolumeName in persistentVolumeClaims below
-				Name:      fmt.Sprintf("%s-%s", service.Name, params.Name),
+				Name:      volumeMountName,
 				ReadOnly:  params.ReadOnly,
 				MountPath: params.Mount,
 			})
@@ -193,6 +201,10 @@ func (b *Workload) volumes() []corev1.Volume {
 
 	service := &b.group.Services[b.serviceIdx]
 
+    b.log.Info("DEBUG: Creating volumes for service",
+        "serviceName", service.Name,
+        "storageCount", len(service.Resources.Storage))
+
 	for _, storage := range service.Resources.Storage {
 		// Only RAM volumes
 		sclass, ok := storage.Attributes.Find(sdl.StorageAttributeClass).AsString()
@@ -207,9 +219,18 @@ func (b *Workload) volumes() []corev1.Volume {
 		}
 
 		size := resource.NewQuantity(storage.Quantity.Val.Int64(), resource.DecimalSI).DeepCopy()
+        volumeName := fmt.Sprintf("%s-%s", service.Name, storage.Name)
+
+        b.log.Info("DEBUG: Creating RAM volume",
+            "serviceName", service.Name,
+            "storageName", storage.Name,
+            "volumeName", volumeName,
+            "size", size.String(),
+            "class", sclass,
+            "persistent", persistent)
 
 		volumes = append(volumes, corev1.Volume{
-			Name: fmt.Sprintf("%s-%s", service.Name, storage.Name),
+			Name: volumeName,
 			VolumeSource: corev1.VolumeSource{
 				EmptyDir: &corev1.EmptyDirVolumeSource{
 					Medium:    corev1.StorageMediumMemory,
@@ -236,7 +257,6 @@ func (b *Workload) persistentVolumeClaims() []corev1.PersistentVolumeClaim {
 		volumeMode := corev1.PersistentVolumeFilesystem
 		pvc := corev1.PersistentVolumeClaim{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: fmt.Sprintf("%s-%s", service.Name, storage.Name),
 			},
 			Spec: corev1.PersistentVolumeClaimSpec{
 				AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},

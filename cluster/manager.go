@@ -382,10 +382,18 @@ func (dm *deploymentManager) doDeploy(ctx context.Context) ([]string, []string, 
 	// Don't use a context tied to the lifecycle, as we don't want to cancel Kubernetes operations
 	deployCtx := fromctx.ApplyToContext(context.Background(), dm.config.ClusterSettings)
 
+    dm.log.Info("DEBUG: Deploying workload",
+        "leaseID", dm.deployment.LeaseID(),
+        "manifestGroup", dm.deployment.ManifestGroup().Name,
+        "serviceCount", len(dm.deployment.ManifestGroup().Services))
+
 	err = dm.client.Deploy(deployCtx, dm.deployment)
 	label := "success"
 	if err != nil {
 		label = "fail"
+        dm.log.Error("DEBUG: Deploy failed with detailed error",
+            "err", err.Error(),
+            "deployment", dm.deployment)
 	}
 	deploymentCounter.WithLabelValues("deploy", label).Inc()
 	if err != nil {

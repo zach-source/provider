@@ -174,7 +174,7 @@ loop:
 			m.clearFetched()
 			m.maybeScheduleStop()
 		case req := <-m.manifestch:
-			m.log.Info("manifest received")
+			m.log.Info("DEBUG: manifest received")
 
 			m.requests = append(m.requests, req)
 			m.maybeScheduleStop()
